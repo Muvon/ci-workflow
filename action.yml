@@ -1,0 +1,58 @@
+name: 'CI Brief Action'
+description: 'Generate PR briefs in CI using Octomind. Picks full-branch vs incremental prompt based on the PR event action.'
+author: 'Muvon Un Limited'
+
+branding:
+  icon: 'file-text'
+  color: 'purple'
+
+inputs:
+  role:
+    description: 'Octomind role to use'
+    required: false
+    default: 'developer:brief'
+  model:
+    description: 'Model override'
+    required: false
+    default: 'ollama:glm-5.1'
+  comment:
+    description: 'PR comment mode: full, compact, none'
+    required: false
+    default: 'full'
+  github_token:
+    description: 'GitHub token for PR commenting'
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Build brief prompt
+      id: prompt
+      shell: bash
+      env:
+        EVENT_ACTION: ${{ github.event.action }}
+        HEAD_REF: ${{ github.head_ref }}
+        BASE_REF: ${{ github.base_ref }}
+        BEFORE_SHA: ${{ github.event.before }}
+        AFTER_SHA: ${{ github.event.after }}
+      run: |
+        if [ "$EVENT_ACTION" = "synchronize" ]; then
+          PROMPT="Analyze changes from commit ${BEFORE_SHA} to ${AFTER_SHA} and provide a brief summary of incremental changes"
+        else
+          PROMPT="Compare branch '${HEAD_REF}' to '${BASE_REF}' and provide a brief summary of all changes"
+        fi
+        {
+          echo "value<<OCTOMIND_PROMPT_EOF"
+          echo "$PROMPT"
+          echo "OCTOMIND_PROMPT_EOF"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Run octomind brief
+      uses: muvon/octomind-action@master
+      with:
+        role: ${{ inputs.role }}
+        model: ${{ inputs.model }}
+        prompt: ${{ steps.prompt.outputs.value }}
+        comment: ${{ inputs.comment }}
+        github_token: ${{ inputs.github_token }}
