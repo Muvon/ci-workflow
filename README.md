@@ -28,9 +28,13 @@ jobs:
     secrets: inherit
 ```
 
-Configure provider keys (`OLLAMA_API_KEY`, `OPENROUTER_API_KEY`, …) once as
-**organization secrets** with visibility "all repositories" — every repo inherits
-them via `secrets: inherit`. Repo-level secrets also work.
+Configure once at the **organization** level (visibility "all repositories"):
+
+- **Variable** `OCTOHUB_API_URL` — Octohub API endpoint
+- **Secret** `OCTOHUB_API_KEY` — Octohub API key
+
+Org `vars` are inherited automatically by reusable workflows; secrets are inherited
+via `secrets: inherit`. Repo-level overrides also work.
 
 ## Overrides
 
@@ -53,16 +57,9 @@ jobs:
 | `model`   | `ollama:glm-5.1`     | Model override                             |
 | `comment` | `full`               | PR comment mode: `full`, `compact`, `none` |
 
-## Supported provider secrets
+## Env passed to octomind-action
 
-Passed through automatically when present in the caller (via `secrets: inherit`):
-
-- `OLLAMA_API_KEY`
-- `OPENROUTER_API_KEY`
-- `ANTHROPIC_API_KEY`
-- `OPENAI_API_KEY`
-- `GOOGLE_API_KEY`
-- `GROQ_API_KEY`
-- `DEEPSEEK_API_KEY`
-
-Add more in `.github/workflows/brief.yml` as needed.
+| Name              | Source                       |
+| ----------------- | ---------------------------- |
+| `OCTOHUB_API_URL` | `vars.OCTOHUB_API_URL`       |
+| `OCTOHUB_API_KEY` | `secrets.OCTOHUB_API_KEY`    |
