@@ -26,10 +26,32 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: muvon/ci-brief-action@master
+      - name: Build brief prompt
+        id: prompt
+        shell: bash
+        env:
+          EVENT_ACTION: ${{ github.event.action }}
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.event.after }}
+        run: |
+          if [ "$EVENT_ACTION" = "synchronize" ]; then
+            PROMPT="Analyze changes from commit ${BEFORE_SHA} to ${AFTER_SHA} and provide a brief summary of incremental changes"
+          else
+            PROMPT="Compare branch '${HEAD_REF}' to '${BASE_REF}' and provide a brief summary of all changes"
+          fi
+          {
+            echo "value<<OCTOMIND_PROMPT_EOF"
+            echo "$PROMPT"
+            echo "OCTOMIND_PROMPT_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: muvon/octomind-action@master
         with:
           role: ${{ inputs.role }}
           model: ${{ inputs.model }}
+          prompt: ${{ steps.prompt.outputs.value }}
           comment: ${{ inputs.comment }}
         env:
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
