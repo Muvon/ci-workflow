@@ -11,21 +11,51 @@ Thin wrapper around [`muvon/octomind-action`](https://github.com/muvon/octomind-
 
 Pin to `@master` — no versioning. Change behavior here, propagates to every repo.
 
-## Usage
+## Usage (preferred — reusable workflow)
+
+One job line per repo. Secrets are inherited from the caller, so individual workflows
+don't need to reference them.
 
 ```yaml
-brief:
-  name: PR Brief
-  runs-on: ubuntu-latest
-  if: github.event_name == 'pull_request'
-  steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+# .github/workflows/ci.yml
+on:
+  push: { branches: [master, main] }
+  pull_request: { branches: [master, main] }
 
-    - uses: muvon/ci-brief-action@master
-      env:
-        OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+jobs:
+  brief:
+    uses: muvon/ci-brief-action/.github/workflows/brief.yml@master
+    secrets: inherit
+```
+
+Configure provider API keys (`OLLAMA_API_KEY`, `OPENROUTER_API_KEY`, …) once as
+**organization secrets** with visibility "all repositories" — every repo inherits them
+without per-repo configuration. Repo-level secrets also work.
+
+Optional overrides:
+
+```yaml
+jobs:
+  brief:
+    uses: muvon/ci-brief-action/.github/workflows/brief.yml@master
+    secrets: inherit
+    with:
+      role: developer:brief
+      model: openrouter:anthropic/claude-sonnet-4
+      comment: compact
+```
+
+## Usage (alt — composite action)
+
+Use this when you need step-level integration inside an existing job. You handle the
+checkout and secret env yourself:
+
+```yaml
+- uses: actions/checkout@v4
+  with: { fetch-depth: 0 }
+- uses: muvon/ci-brief-action@master
+  env:
+    OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
 ```
 
 ## Inputs
@@ -35,6 +65,4 @@ brief:
 | `role`         | `developer:brief`    | Octomind role                              |
 | `model`        | `ollama:glm-5.1`     | Model override                             |
 | `comment`      | `full`               | PR comment mode: `full`, `compact`, `none` |
-| `github_token` | `${{ github.token }}` | Token for PR commenting                    |
-
-Provider API keys (e.g. `OLLAMA_API_KEY`, `OPENROUTER_API_KEY`) are passed via job/step `env`.
+| `github_token` | `${{ github.token }}` | Token for PR commenting (composite only)   |
