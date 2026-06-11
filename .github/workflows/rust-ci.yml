@@ -1,0 +1,255 @@
+name: Rust CI
+
+on:
+  workflow_call:
+    inputs:
+      toolchain:
+        description: 'Rust toolchain version'
+        type: string
+        required: false
+        default: '1.95.0'
+      feature-flags:
+        description: 'Feature flags for cargo check/clippy/doc (e.g. --all-features)'
+        type: string
+        required: false
+        default: ''
+      setup-protoc:
+        description: 'Install protoc before building'
+        type: boolean
+        required: false
+        default: false
+      tools:
+        description: 'Extra tools installed via taiki-e/install-action (comma-separated)'
+        type: string
+        required: false
+        default: ''
+      test:
+        description: 'Run the cross-platform test job (disable to keep a project-specific one)'
+        type: boolean
+        required: false
+        default: true
+      test-script:
+        description: 'Shell script for the test step (bash on all platforms)'
+        type: string
+        required: false
+        default: 'cargo test --verbose'
+      doc:
+        description: 'Run cargo doc with -D warnings'
+        type: boolean
+        required: false
+        default: true
+      coverage:
+        description: 'Run tarpaulin coverage and upload to Codecov'
+        type: boolean
+        required: false
+        default: true
+      tarpaulin-args:
+        description: 'Arguments for cargo tarpaulin'
+        type: string
+        required: false
+        default: '--verbose --timeout 120 --out xml'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # Keep target/ small enough for runner disks: incremental compilation
+  # artifacts and debuginfo dominate debug-build size and are useless in CI.
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
+
+jobs:
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ inputs.toolchain }}
+          components: rustfmt
+
+      - name: Run cargo fmt
+        run: cargo fmt --all -- --check
+
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ inputs.toolchain }}
+
+      - name: Setup protoc
+        if: inputs.setup-protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install tools
+        if: inputs.tools != ''
+        uses: taiki-e/install-action@v2
+        with:
+          tool: ${{ inputs.tools }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run cargo check
+        run: cargo check --all-targets ${{ inputs.feature-flags }}
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ inputs.toolchain }}
+          components: clippy
+
+      - name: Setup protoc
+        if: inputs.setup-protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install tools
+        if: inputs.tools != ''
+        uses: taiki-e/install-action@v2
+        with:
+          tool: ${{ inputs.tools }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run cargo clippy
+        run: cargo clippy --all-targets ${{ inputs.feature-flags }} -- -D warnings
+
+  test:
+    name: Test Suite
+    if: inputs.test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        rust: ['${{ inputs.toolchain }}']
+        include:
+          - os: ubuntu-latest
+            rust: beta
+          - os: ubuntu-latest
+            rust: nightly
+    continue-on-error: ${{ matrix.rust == 'nightly' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: Setup protoc
+        if: inputs.setup-protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install tools
+        if: inputs.tools != ''
+        uses: taiki-e/install-action@v2
+        with:
+          tool: ${{ inputs.tools }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Run tests
+        shell: bash
+        run: ${{ inputs.test-script }}
+
+  doc:
+    name: Documentation
+    if: inputs.doc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ inputs.toolchain }}
+
+      - name: Setup protoc
+        if: inputs.setup-protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install tools
+        if: inputs.tools != ''
+        uses: taiki-e/install-action@v2
+        with:
+          tool: ${{ inputs.tools }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check documentation
+        run: cargo doc ${{ inputs.feature-flags }} --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ inputs.toolchain }}
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Run security audit
+        run: cargo audit
+
+  coverage:
+    name: Code Coverage
+    if: inputs.coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ inputs.toolchain }}
+
+      - name: Setup protoc
+        if: inputs.setup-protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install tools
+        if: inputs.tools != ''
+        uses: taiki-e/install-action@v2
+        with:
+          tool: ${{ inputs.tools }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      # rust-cache includes ~/.cargo/bin, so this is a no-op when the same
+      # tarpaulin version is already cached.
+      - name: Install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin --locked
+
+      - name: Generate code coverage
+        run: cargo tarpaulin ${{ inputs.tarpaulin-args }}
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./cobertura.xml
+          fail_ci_if_error: false
