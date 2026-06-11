@@ -8,6 +8,21 @@ on:
         type: string
         required: false
         default: '1.95.0'
+      runner:
+        description: 'Runner for jobs that compile the crate (check/clippy/doc/coverage)'
+        type: string
+        required: false
+        default: 'ubuntu-latest'
+      test-os:
+        description: 'JSON array of runners for the test matrix'
+        type: string
+        required: false
+        default: '["ubuntu-latest", "windows-latest", "macos-latest"]'
+      test-includes:
+        description: 'JSON array of extra test matrix entries'
+        type: string
+        required: false
+        default: '[{"os": "ubuntu-latest", "rust": "beta"}, {"os": "ubuntu-latest", "rust": "nightly"}]'
       feature-flags:
         description: 'Feature flags for cargo check/clippy/doc (e.g. --all-features)'
         type: string
@@ -75,7 +90,7 @@ jobs:
 
   check:
     name: Check
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     steps:
       - uses: actions/checkout@v4
 
@@ -102,7 +117,7 @@ jobs:
 
   clippy:
     name: Clippy
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     steps:
       - uses: actions/checkout@v4
 
@@ -134,13 +149,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: ${{ fromJSON(inputs.test-os) }}
         rust: ['${{ inputs.toolchain }}']
-        include:
-          - os: ubuntu-latest
-            rust: beta
-          - os: ubuntu-latest
-            rust: nightly
+        include: ${{ fromJSON(inputs.test-includes) }}
     continue-on-error: ${{ matrix.rust == 'nightly' }}
     steps:
       - uses: actions/checkout@v4
@@ -172,7 +183,7 @@ jobs:
   doc:
     name: Documentation
     if: inputs.doc
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     steps:
       - uses: actions/checkout@v4
 
@@ -218,7 +229,7 @@ jobs:
   coverage:
     name: Code Coverage
     if: inputs.coverage
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     steps:
       - uses: actions/checkout@v4
 

@@ -144,17 +144,22 @@ jobs:
 
 ### Inputs
 
-| Input           | Default                            | Description                                                        |
-| --------------- | ---------------------------------- | ------------------------------------------------------------------ |
-| `toolchain`     | `1.95.0`                           | Rust toolchain version (bump here → propagates to all repos)        |
-| `feature-flags` | _(none)_                           | Flags for `cargo check`/`clippy`/`doc` (e.g. `--all-features`)      |
-| `setup-protoc`  | `false`                            | Install protoc before building                                      |
-| `tools`         | _(none)_                           | Extra tools via `taiki-e/install-action` (e.g. `ripgrep,ast-grep`)  |
-| `test`          | `true`                             | Disable to keep a project-specific test job in the caller           |
-| `test-script`   | `cargo test --verbose`             | Shell script for the test step (bash on all platforms)              |
-| `doc`           | `true`                             | Run `cargo doc` with `-D warnings`                                  |
-| `coverage`      | `true`                             | Run tarpaulin and upload to Codecov                                 |
-| `tarpaulin-args`| `--verbose --timeout 120 --out xml`| Arguments for `cargo tarpaulin`                                     |
+| Input           | Default                            | Description                                                            |
+| --------------- | ---------------------------------- | ----------------------------------------------------------------------- |
+| `toolchain`     | `1.95.0`                           | Rust toolchain version (bump here → propagates to all repos)             |
+| `runner`        | `ubuntu-latest`                    | Runner for jobs that compile the crate (e.g. `macos-15` for a macOS app) |
+| `feature-flags` | _(none)_                           | Flags for `cargo check`/`clippy`/`doc` (e.g. `--all-features`)           |
+| `setup-protoc`  | `false`                            | Install protoc before building                                           |
+| `tools`         | _(none)_                           | Extra tools via `taiki-e/install-action` (e.g. `ripgrep,ast-grep`)       |
+| `test`          | `true`                             | Disable to keep a project-specific test job in the caller                |
+| `test-os`       | ubuntu + windows + macos           | JSON array of runners for the test matrix                                |
+| `test-includes` | beta + nightly on ubuntu           | JSON array of extra test matrix entries (`'[]'` to disable)              |
+| `test-script`   | `cargo test --verbose`             | Shell script for the test step (bash on all platforms)                   |
+| `doc`           | `true`                             | Run `cargo doc` with `-D warnings`                                       |
+| `coverage`      | `true`                             | Run tarpaulin and upload to Codecov                                      |
+| `tarpaulin-args`| `--verbose --timeout 120 --out xml`| Arguments for `cargo tarpaulin`                                          |
+
+`fmt` and `security` always run on `ubuntu-latest` — neither compiles the crate.
 
 ## Rust Publish (`rust-publish.yml`)
 
