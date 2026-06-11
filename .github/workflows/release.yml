@@ -1,0 +1,116 @@
+name: Release
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Release tag (defaults to the pushed tag ref)'
+        type: string
+        required: false
+        default: ''
+      artifacts:
+        description: 'Artifact name pattern to download and attach to the release (empty = none)'
+        type: string
+        required: false
+        default: ''
+      draft:
+        description: 'Create the release as draft'
+        type: boolean
+        required: false
+        default: true
+    outputs:
+      version:
+        description: 'Resolved release version'
+        value: ${{ jobs.release.outputs.version }}
+      changelog:
+        description: 'Changelog section for the released version'
+        value: ${{ jobs.release.outputs.changelog }}
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
+      changelog: ${{ steps.changelog.outputs.CHANGELOG }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve and validate version
+        id: version
+        env:
+          TAG_INPUT: ${{ inputs.tag }}
+        run: |
+          VERSION="${TAG_INPUT:-${GITHUB_REF#refs/tags/}}"
+          case "$VERSION" in
+            [0-9]*.[0-9]*.[0-9]*|v[0-9]*.[0-9]*.[0-9]*)
+              ;;
+            *)
+              echo "Error: '$VERSION' is not a valid semver tag"
+              echo "Expected format: X.Y.Z, X.Y.Z-prerelease, or X.Y.Z+build (optional v prefix)"
+              exit 1
+              ;;
+          esac
+          echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Extract changelog
+        id: changelog
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          # Section for this version: between "## [VERSION]" and the next "## [" heading
+          awk -v ver="${VERSION#v}" '
+            index($0, "## [" ver "]") == 1 { found=1; next }
+            /^## \[/ && found { exit }
+            found { print }
+          ' CHANGELOG.md > release_changelog.md
+
+          if ! grep -q '[^[:space:]]' release_changelog.md; then
+            echo "Error: no section for version ${VERSION#v} found in CHANGELOG.md"
+            exit 1
+          fi
+
+          {
+            echo "CHANGELOG<<CHANGELOG_EOF"
+            cat release_changelog.md
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Download artifacts
+        if: inputs.artifacts != ''
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ inputs.artifacts }}
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+          DRAFT: ${{ inputs.draft }}
+        run: |
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "Release $VERSION already exists, skipping creation"
+            exit 0
+          fi
+
+          ARGS=(--title "Release $VERSION" --notes-file release_changelog.md)
+          [ "$DRAFT" = "true" ] && ARGS+=(--draft)
+          # Prereleases: explicit -prerelease suffix or pre-1.0 versions
+          case "$VERSION" in
+            *-*|0.*|v0.*) ARGS+=(--prerelease) ;;
+          esac
+
+          gh release create "$VERSION" "${ARGS[@]}"
+
+      - name: Attach artifacts
+        if: inputs.artifacts != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          gh release upload "$VERSION" release-artifacts/* --clobber
