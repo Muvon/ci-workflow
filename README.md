@@ -109,11 +109,11 @@ jobs:
 
 ### Inputs
 
-| Input       | Default        | Description                                                      |
-| ----------- | -------------- | ---------------------------------------------------------------- |
-| `tag`       | pushed tag ref | Release tag (set explicitly for `workflow_dispatch` callers)     |
-| `artifacts` | _(none)_       | Artifact name pattern to download and attach to the release      |
-| `draft`     | `true`         | Create as draft (caller un-drafts later) or publish immediately  |
+| Input       | Default        | Description                                                              |
+| ----------- | -------------- | ------------------------------------------------------------------------ |
+| `tag`       | pushed tag ref | Release tag (set explicitly for `workflow_dispatch` callers)             |
+| `artifacts` | _(none)_       | Artifact name pattern to download and attach to the release              |
+| `draft`     | `true`         | Keep as draft; `false` publishes after all artifacts are attached        |
 
 ### Outputs
 
@@ -121,3 +121,103 @@ jobs:
 | ----------- | ---------------------------------------------------- |
 | `version`   | Resolved release version                             |
 | `changelog` | Extracted changelog section for the released version |
+
+## Rust CI (`rust-ci.yml`)
+
+Standard CI for Rust projects: `fmt`, `check`, `clippy`, `test` (Linux/Windows/macOS
+matrix + beta/nightly on Linux), `doc`, `security` (cargo-audit), `coverage`
+(tarpaulin + Codecov). Uses `Swatinem/rust-cache` and disables incremental
+compilation/debuginfo to keep runner disks small.
+
+```yaml
+# .github/workflows/ci.yml
+on:
+  push: { branches: [master, main, develop] }
+  pull_request: { branches: [master, main, develop] }
+
+jobs:
+  rust:
+    uses: muvon/ci-workflow/.github/workflows/rust-ci.yml@master
+    with:
+      feature-flags: '--all-features'
+```
+
+### Inputs
+
+| Input           | Default                            | Description                                                        |
+| --------------- | ---------------------------------- | ------------------------------------------------------------------ |
+| `toolchain`     | `1.95.0`                           | Rust toolchain version (bump here → propagates to all repos)        |
+| `feature-flags` | _(none)_                           | Flags for `cargo check`/`clippy`/`doc` (e.g. `--all-features`)      |
+| `setup-protoc`  | `false`                            | Install protoc before building                                      |
+| `tools`         | _(none)_                           | Extra tools via `taiki-e/install-action` (e.g. `ripgrep,ast-grep`)  |
+| `test`          | `true`                             | Disable to keep a project-specific test job in the caller           |
+| `test-script`   | `cargo test --verbose`             | Shell script for the test step (bash on all platforms)              |
+| `doc`           | `true`                             | Run `cargo doc` with `-D warnings`                                  |
+| `coverage`      | `true`                             | Run tarpaulin and upload to Codecov                                 |
+| `tarpaulin-args`| `--verbose --timeout 120 --out xml`| Arguments for `cargo tarpaulin`                                     |
+
+## Rust Publish (`rust-publish.yml`)
+
+Publishes a crate to crates.io: validates the tag matches `Cargo.toml` version,
+skips if already published, dry-runs, then publishes. Crate name is read from
+`Cargo.toml` — nothing project-specific to configure.
+
+Requires the `CARGO_REGISTRY_TOKEN` secret (`secrets: inherit` with an org-level
+secret, or pass explicitly).
+
+### Inputs
+
+| Input           | Default        | Description                                              |
+| --------------- | -------------- | -------------------------------------------------------- |
+| `tag`           | pushed tag ref | Version tag (set explicitly for `workflow_dispatch`)     |
+| `publish-flags` | _(none)_       | Flags for `cargo publish` (e.g. `--no-default-features`) |
+| `setup-protoc`  | `false`        | Install protoc before building                           |
+| `toolchain`     | `1.95.0`       | Rust toolchain version                                   |
+
+## Shipping a Rust project
+
+The full pattern — CI on every push/PR, release on tag. Project-specific jobs
+(binary builds, docker, etc.) stay in the project and hand artifacts to the
+common release via `actions/upload-artifact`:
+
+```yaml
+# .github/workflows/ci.yml
+on:
+  push: { branches: [master, main, develop] }
+  pull_request: { branches: [master, main, develop] }
+
+jobs:
+  rust:
+    uses: muvon/ci-workflow/.github/workflows/rust-ci.yml@master
+  brief:
+    uses: muvon/ci-workflow/.github/workflows/brief.yml@master
+    secrets: inherit
+```
+
+```yaml
+# .github/workflows/release.yml
+on:
+  push:
+    tags: ['[0-9]+.[0-9]+.[0-9]+*']
+  workflow_dispatch:
+    inputs:
+      tag: { description: 'Tag to release', required: true, type: string }
+
+jobs:
+  publish-crate:
+    uses: muvon/ci-workflow/.github/workflows/rust-publish.yml@master
+    secrets: inherit
+    with:
+      tag: ${{ inputs.tag }}
+
+  release:
+    needs: publish-crate
+    uses: muvon/ci-workflow/.github/workflows/release.yml@master
+    with:
+      tag: ${{ inputs.tag }}
+      draft: false
+```
+
+Keep `CHANGELOG.md` updated per version (`## [X.Y.Z]` headings) — the release
+body comes from it. Reference setups: `muvon/octolib` (library, simple),
+`muvon/octomind` (binary matrix builds, docker, homebrew).
