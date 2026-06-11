@@ -91,15 +91,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.VERSION }}
-          DRAFT: ${{ inputs.draft }}
         run: |
           if gh release view "$VERSION" >/dev/null 2>&1; then
             echo "Release $VERSION already exists, skipping creation"
             exit 0
           fi
 
-          ARGS=(--title "Release $VERSION" --notes-file release_changelog.md)
-          [ "$DRAFT" = "true" ] && ARGS+=(--draft)
+          ARGS=(--title "Release $VERSION" --notes-file release_changelog.md --draft)
           # Prereleases: explicit -prerelease suffix or pre-1.0 versions
           case "$VERSION" in
             *-*|0.*|v0.*) ARGS+=(--prerelease) ;;
@@ -114,3 +112,13 @@ jobs:
           VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
           gh release upload "$VERSION" release-artifacts/* --clobber
+
+      # Created as draft above so the release never appears public without
+      # its assets; publish here once everything is attached.
+      - name: Publish release
+        if: ${{ !inputs.draft }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          gh release edit "$VERSION" --draft=false
