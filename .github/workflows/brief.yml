@@ -20,11 +20,17 @@ jobs:
   brief:
     name: PR Brief
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
+    # Fork PRs are gated behind the 'fork-pr' environment (required reviewer),
+    # so secrets are only used after a maintainer approves the run.
+    # Same-repo PRs get an empty environment = no gate.
+    environment: ${{ github.event.pull_request.head.repo.full_name != github.repository && 'fork-pr' || '' }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # Check out the PR head; pull_request_target defaults to the base branch.
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Build brief prompt
         id: prompt
