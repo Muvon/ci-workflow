@@ -34,7 +34,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
-          gh release download "$VERSION" --pattern server.json --output server.json
+          gh release download "$VERSION" --pattern server.json --output server.json --clobber
 
       - name: Install mcp-publisher
         run: |
