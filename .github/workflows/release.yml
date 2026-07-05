@@ -123,9 +123,10 @@ jobs:
                   "transport": {"type": "stdio"}
               })
 
+          # Merge: append mcpb packages to existing array (preserves oci/docker entries)
           with open("server.json") as f:
               data = json.load(f)
-          data["packages"] = packages
+          data.setdefault("packages", []).extend(packages)
           with open("release-artifacts/server.json", "w") as f:
               json.dump(data, f, indent=2)
           print(f"Generated server.json with {len(packages)} package(s)")
