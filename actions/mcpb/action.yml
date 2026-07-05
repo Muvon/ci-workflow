@@ -1,0 +1,96 @@
+name: 'Create MCPB Bundle'
+description: 'Package a binary MCP server into a .mcpb bundle with manifest.json and compute SHA-256 for MCP registry publishing'
+
+inputs:
+  version:
+    description: 'Release version (semver, without v prefix)'
+    required: true
+  target:
+    description: 'Rust target triple (e.g. x86_64-apple-darwin)'
+    required: true
+  description:
+    description: 'Server description for manifest.json'
+    required: true
+  args:
+    description: 'JSON array of args to start the MCP server (e.g. ["mcp"])'
+    required: false
+    default: '["mcp"]'
+  output-dir:
+    description: 'Directory to write .mcpb and .sha256 files'
+    required: false
+    default: 'dist'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Create MCPB bundle
+      shell: sh
+      env:
+        VERSION: ${{ inputs.version }}
+        TARGET: ${{ inputs.target }}
+        SERVER_DESC: ${{ inputs.description }}
+        ARGS: ${{ inputs.args }}
+        OUTPUT_DIR: ${{ inputs.output-dir }}
+      run: |
+        # Derive server/binary name from repo name (e.g. muvon/octofs → octofs)
+        SERVER_NAME="${GITHUB_REPOSITORY##*/}"
+        # Windows targets get .exe suffix
+        case "$TARGET" in
+          *-windows-*) BIN="$SERVER_NAME.exe"; PLATFORM="win32" ;;
+          *-apple-darwin) BIN="$SERVER_NAME"; PLATFORM="darwin" ;;
+          *-linux-*) BIN="$SERVER_NAME"; PLATFORM="linux" ;;
+        esac
+        BIN_PATH="target/$TARGET/release/$BIN"
+
+        # Build manifest.json (quoted heredoc prevents shell expanding ${__dirname})
+        cat > manifest.json <<'EOF'
+        {
+          "manifest_version": "0.3",
+          "name": "SERVER_NAME_PLACEHOLDER",
+          "version": "VERSION_PLACEHOLDER",
+          "description": "DESCRIPTION_PLACEHOLDER",
+          "author": {
+            "name": "Muvon Un Limited",
+            "url": "https://github.com/muvon"
+          },
+          "server": {
+            "type": "binary",
+            "entry_point": "server/BIN_PLACEHOLDER",
+            "mcp_config": {
+              "command": "${__dirname}/server/BIN_PLACEHOLDER",
+              "args": ARGS_PLACEHOLDER
+            }
+          },
+          "compatibility": {
+            "platforms": ["PLATFORM_PLACEHOLDER"]
+          }
+        }
+        EOF
+
+        # Substitute placeholders (perl for cross-platform portability)
+        perl -pi -e "s/SERVER_NAME_PLACEHOLDER/$SERVER_NAME/g" manifest.json
+        perl -pi -e "s/VERSION_PLACEHOLDER/$VERSION/g" manifest.json
+        perl -pi -e "s/DESCRIPTION_PLACEHOLDER/$SERVER_DESC/g" manifest.json
+        perl -pi -e "s/BIN_PLACEHOLDER/$BIN/g" manifest.json
+        perl -pi -e "s/PLATFORM_PLACEHOLDER/$PLATFORM/g" manifest.json
+        perl -pi -e "s/ARGS_PLACEHOLDER/$ARGS/g" manifest.json
+
+        # Assemble .mcpb (zip with manifest.json at root + binary in server/)
+        mkdir -p mcpb/server
+        cp "$BIN_PATH" mcpb/server/
+        cp manifest.json mcpb/
+        mkdir -p "$OUTPUT_DIR"
+        cd mcpb
+        if command -v zip >/dev/null 2>&1; then
+          zip -r "../$OUTPUT_DIR/$SERVER_NAME-$VERSION-$TARGET.mcpb" .
+        else
+          7z a "../$OUTPUT_DIR/$SERVER_NAME-$VERSION-$TARGET.mcpb" .
+        fi
+        cd ..
+
+        # Compute SHA-256 for registry integrity verification
+        if command -v sha256sum >/dev/null 2>&1; then
+          sha256sum "$OUTPUT_DIR/$SERVER_NAME-$VERSION-$TARGET.mcpb" | awk '{print $1}' > "$OUTPUT_DIR/$TARGET.sha256"
+        else
+          certutil -hashfile "$OUTPUT_DIR/$SERVER_NAME-$VERSION-$TARGET.mcpb" SHA256 | awk 'NR==2{print $1}' > "$OUTPUT_DIR/$TARGET.sha256"
+        fi

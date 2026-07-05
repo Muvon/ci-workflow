@@ -87,6 +87,50 @@ jobs:
           path: release-artifacts
           merge-multiple: true
 
+      - name: Generate server.json from MCPB hashes
+        if: inputs.artifacts != ''
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        shell: bash
+        run: |
+          if [ ! -f server.json ]; then
+            echo "No server.json found, skipping MCPB server.json generation"
+            exit 0
+          fi
+
+          if ! ls release-artifacts/*.sha256 >/dev/null 2>&1; then
+            echo "No .sha256 files found, skipping server.json generation"
+            exit 0
+          fi
+
+          VERSION="${VERSION#v}"
+          REPO="$GITHUB_REPOSITORY"
+
+          # Build packages array from .sha256 files and merge into server.json
+          python3 - "$VERSION" "$REPO" <<'PYEOF'
+          import json, glob, os, sys
+
+          version, repo = sys.argv[1], sys.argv[2]
+          packages = []
+          for sha_file in sorted(glob.glob("release-artifacts/*.sha256")):
+              target = os.path.basename(sha_file).replace(".sha256", "")
+              with open(sha_file) as f:
+                  hash_val = f.read().strip()
+              packages.append({
+                  "registryType": "mcpb",
+                  "identifier": f"https://github.com/{repo}/releases/download/{version}/octofs-{version}-{target}.mcpb",
+                  "fileSha256": hash_val,
+                  "transport": {"type": "stdio"}
+              })
+
+          with open("server.json") as f:
+              data = json.load(f)
+          data["packages"] = packages
+          with open("release-artifacts/server.json", "w") as f:
+              json.dump(data, f, indent=2)
+          print(f"Generated server.json with {len(packages)} package(s)")
+          PYEOF
+
       - name: Create release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
