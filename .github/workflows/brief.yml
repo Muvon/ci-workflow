@@ -60,5 +60,4 @@ jobs:
           prompt: ${{ steps.prompt.outputs.value }}
           comment: ${{ inputs.comment }}
         env:
-          OCTOHUB_API_URL: ${{ vars.OCTOHUB_API_URL }}
           OCTOHUB_API_KEY: ${{ secrets.OCTOHUB_API_KEY }}
