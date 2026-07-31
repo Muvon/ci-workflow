@@ -7,7 +7,7 @@ on:
         description: 'Rust toolchain version'
         type: string
         required: false
-        default: '1.97.0'
+        default: '1.97.1'
       runner:
         description: 'Runner for jobs that compile the crate (check/clippy/doc/coverage)'
         type: string
