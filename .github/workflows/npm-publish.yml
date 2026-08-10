@@ -1,0 +1,59 @@
+name: NPM Publish
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Version tag (defaults to the pushed tag ref)'
+        type: string
+        required: false
+        default: ''
+    secrets:
+      NPM_TOKEN:
+        required: true
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Checkout ci-workflow
+        uses: actions/checkout@v4
+        with:
+          repository: Muvon/ci-workflow
+          ref: master
+          path: .ci-workflow
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Build package
+        id: pkg
+        env:
+          TAG_INPUT: ${{ inputs.tag }}
+        run: |
+          VERSION="${TAG_INPUT:-$GITHUB_REF_NAME}"
+          VERSION="${VERSION#v}"
+
+          sh .ci-workflow/npm/pack.sh "$VERSION"
+
+          echo "name=@muvon/${GITHUB_REPOSITORY##*/}" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Publish
+        working-directory: npm-dist
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PKG: ${{ steps.pkg.outputs.name }}
+          VERSION: ${{ steps.pkg.outputs.version }}
+        run: |
+          if npm view "$PKG@$VERSION" version >/dev/null 2>&1; then
+            echo "⚠️ $PKG@$VERSION already published, skipping"
+            exit 0
+          fi
+          npm publish --access public

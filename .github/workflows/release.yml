@@ -18,6 +18,11 @@ on:
         type: boolean
         required: false
         default: true
+      npm-args:
+        description: 'JSON array of args for `npx @muvon/<repo>` (e.g. ["mcp"]). Set to add an npm package entry to server.json'
+        type: string
+        required: false
+        default: ''
     outputs:
       version:
         description: 'Resolved release version'
@@ -87,10 +92,11 @@ jobs:
           path: release-artifacts
           merge-multiple: true
 
-      - name: Generate server.json from MCPB hashes
+      - name: Generate server.json packages
         if: inputs.artifacts != ''
         env:
           VERSION: ${{ steps.version.outputs.VERSION }}
+          NPM_ARGS: ${{ inputs.npm-args }}
         shell: bash
         run: |
           if [ ! -f server.json ]; then
@@ -98,8 +104,8 @@ jobs:
             exit 0
           fi
 
-          if ! ls release-artifacts/*.sha256 >/dev/null 2>&1; then
-            echo "No .sha256 files found, skipping server.json generation"
+          if ! ls release-artifacts/*.sha256 >/dev/null 2>&1 && [ -z "$NPM_ARGS" ]; then
+            echo "No .sha256 files and no npm-args, skipping server.json generation"
             exit 0
           fi
 
@@ -113,6 +119,24 @@ jobs:
           version, repo = sys.argv[1], sys.argv[2]
           server_name = repo.split("/")[1]
           packages = []
+
+          # npx first — clients pick the first runnable package, and npx needs no
+          # per-platform artifact.
+          npm_args = os.environ.get("NPM_ARGS", "")
+          if npm_args:
+              npm = {
+                  "registryType": "npm",
+                  "registryBaseUrl": "https://registry.npmjs.org",
+                  "identifier": f"@muvon/{server_name}",
+                  "version": version,
+                  "runtimeHint": "npx",
+                  "transport": {"type": "stdio"},
+              }
+              args = [{"type": "positional", "value": a} for a in json.loads(npm_args)]
+              if args:
+                  npm["packageArguments"] = args
+              packages.append(npm)
+
           for sha_file in sorted(glob.glob("release-artifacts/*.sha256")):
               target = os.path.basename(sha_file).replace(".sha256", "")
               with open(sha_file) as f:

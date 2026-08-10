@@ -179,6 +179,81 @@ secret, or pass explicitly).
 | `setup-protoc`  | `false`        | Install protoc before building                           |
 | `toolchain`     | `1.97.1`       | Rust toolchain version                                   |
 
+## NPM Publish (`npm-publish.yml`)
+
+Publishes `@muvon/<repo>` to npm so the binary is installable with
+`npx @muvon/<repo>`. The package contains no binary: it ships a ~80-line
+launcher (`npm/cli.js`) that downloads the matching release archive from
+GitHub on first run, caches it under `~/.cache/muvon/<repo>/<version>/`, and
+execs it. No postinstall script, no per-platform packages, no npm bandwidth.
+
+Everything is derived — nothing to configure per repo:
+
+| package.json field | Source                              |
+| ------------------ | ----------------------------------- |
+| `name`             | `@muvon/<repo>`                     |
+| `version`          | release tag                         |
+| `description`      | `server.json` `description`         |
+| `mcpName`          | `server.json` `name`                |
+| `bin`              | `<repo>` → `cli.js`                 |
+| `homepage`         | `server.json` `websiteUrl`          |
+| readme             | the repo's `README.md` at the tag   |
+
+`mcpName` is what the MCP registry checks to prove ownership of the npm
+package, so npm must be published **before** `mcp-publish.yml` runs.
+
+Requires the `NPM_TOKEN` secret (org-level + `secrets: inherit`) with publish
+rights on the `@muvon` scope. Skips if the version is already on npm.
+
+Supported platforms are the release matrix targets: darwin arm64/x64, linux
+musl arm64/x64, windows msvc arm64/x64. A platform without a release asset
+fails with an explicit error rather than a silent fallback.
+
+### Usage
+
+```yaml
+jobs:
+  release:
+    uses: muvon/ci-workflow/.github/workflows/release.yml@master
+    with:
+      tag: ${{ inputs.tag }}
+      artifacts: 'release-*'
+      draft: false
+      npm-args: '["mcp"]'   # adds the npx entry to server.json
+
+  publish-npm:
+    needs: release
+    uses: muvon/ci-workflow/.github/workflows/npm-publish.yml@master
+    secrets: inherit
+    with:
+      tag: ${{ inputs.tag }}
+
+  publish-mcp:
+    needs: [release, publish-npm]
+    uses: muvon/ci-workflow/.github/workflows/mcp-publish.yml@master
+    with:
+      tag: ${{ inputs.tag }}
+```
+
+`release.yml`'s `npm-args` input takes the JSON array of args passed to the
+binary (`["mcp"]` → `npx @muvon/octobrain mcp`). When set, the release's
+`server.json` gets an `npm` package entry ahead of the `mcpb` ones, so
+registry clients prefer npx.
+
+### Publishing by hand
+
+The workflow just calls `npm/pack.sh`, so the same package can be built and
+published locally for any already-released tag:
+
+```sh
+cd ~/Work/dev/muvon/octofs
+sh ../ci-workflow/npm/pack.sh 0.8.1      # version defaults to server.json's
+npm publish --access public ./npm-dist   # --dry-run to inspect first
+```
+
+The binaries come from the GitHub release at runtime, so nothing needs to be
+built locally — only the release for that tag has to exist.
+
 ## Shipping a Rust project
 
 The full pattern — CI on every push/PR, release on tag. Project-specific jobs
