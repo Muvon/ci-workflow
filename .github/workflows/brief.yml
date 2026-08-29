@@ -10,7 +10,7 @@ on:
       model:
         type: string
         required: false
-        default: 'octohub:glm-5.2'
+        default: 'octohub:glm-5.3'
       comment:
         type: string
         required: false
