@@ -1,0 +1,144 @@
+name: Rust Coverage
+
+on:
+  workflow_call:
+    inputs:
+      toolchain:
+        description: 'Rust toolchain version'
+        type: string
+        required: false
+        default: '1.97.1'
+      ignore-filename-regex:
+        description: 'Files matching this regex are excluded from the report (test-only files)'
+        type: string
+        required: false
+        default: '_tests\.rs$'
+      badge:
+        description: 'Publish a shields.io coverage badge on default-branch pushes'
+        type: boolean
+        required: false
+        default: true
+      badge-branch:
+        description: 'Branch whose pushes publish the badge (badge JSON goes to the orphan "badges" branch)'
+        type: string
+        required: false
+        default: 'master'
+      setup-protoc:
+        description: 'Install protoc before building'
+        type: boolean
+        required: false
+        default: false
+      tools:
+        description: 'Extra tools installed via taiki-e/install-action (comma-separated)'
+        type: string
+        required: false
+        default: ''
+      feature-flags:
+        description: 'Flags for the instrumented test run (e.g. --all-features, --no-default-features)'
+        type: string
+        required: false
+        default: ''
+      setup-script:
+        description: 'Bash project setup before coverage (e.g. ONNX Runtime download)'
+        type: string
+        required: false
+        default: ''
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # Keep target/ small enough for runner disks: incremental compilation
+  # artifacts and debuginfo dominate debug-build size and are useless in CI.
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
+
+jobs:
+  coverage:
+    name: Code Coverage (llvm-cov)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the badge JSON to the `badges` branch
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ inputs.toolchain }}
+          components: llvm-tools-preview
+
+      - name: Setup protoc
+        if: inputs.setup-protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install tools
+        if: inputs.tools != ''
+        uses: taiki-e/install-action@v2
+        with:
+          tool: ${{ inputs.tools }}
+
+      # rust-cache includes ~/.cargo/bin, so this is a no-op when the same
+      # cargo-llvm-cov version is already cached.
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Project-specific setup (e.g. ONNX Runtime static lib) that must run
+      # before the instrumented build. Runs with bash; GITHUB_ENV writes persist.
+      - name: Project setup
+        if: inputs.setup-script != ''
+        shell: bash
+        run: ${{ inputs.setup-script }}
+
+      - name: Generate coverage
+        shell: bash
+        run: |
+          # Run the suite once with instrumentation, then render both formats
+          # from the collected profiles. Test-only files are excluded from the
+          # report so percentages describe product code.
+          cargo llvm-cov --no-report ${{ inputs.feature-flags }}
+          cargo llvm-cov report --lcov --output-path lcov.info --ignore-filename-regex '${{ inputs.ignore-filename-regex }}'
+          {
+            echo '## Coverage'
+            echo '```'
+            cargo llvm-cov report --summary-only --ignore-filename-regex '${{ inputs.ignore-filename-regex }}' | tail -1
+            echo '```'
+            echo '<details><summary>Per-file coverage</summary>'
+            echo ''
+            echo '```'
+            cargo llvm-cov report --summary-only --ignore-filename-regex '${{ inputs.ignore-filename-regex }}'
+            echo '```'
+            echo '</details>'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload lcov artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: lcov.info
+
+      # README badge: shields.io endpoint reads coverage.json from the orphan
+      # `badges` branch (force-pushed, single file, no history). Default-branch
+      # pushes only — PR runs (esp. from forks) have no write access.
+      - name: Publish coverage badge
+        if: inputs.badge && github.event_name == 'push' && github.ref == format('refs/heads/{0}', inputs.badge-branch)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pct=$(cargo llvm-cov report --summary-only --ignore-filename-regex '${{ inputs.ignore-filename-regex }}' | tail -1 | awk '{print $10}' | tr -d '%')
+          color=$(awk -v p="$pct" 'BEGIN { print (p < 50 ? "e05d44" : p < 65 ? "fe7d37" : p < 80 ? "dfb317" : "4c1") }')
+          badge_dir=$(mktemp -d)
+          printf '{"schemaVersion":1,"label":"coverage","message":"%s%%","color":"%s"}\n' "$pct" "$color" > "$badge_dir/coverage.json"
+          cd "$badge_dir"
+          git init -q -b badges
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add coverage.json
+          git commit -q -m "chore: update coverage badge to ${pct}%"
+          git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges

@@ -161,6 +161,44 @@ jobs:
 
 `fmt` and `security` always run on `ubuntu-latest` — neither compiles the crate.
 
+
+## Rust Coverage (`rust-coverage.yml`)
+
+Source-based coverage via `cargo-llvm-cov` — more accurate than tarpaulin and
+needs no Codecov token. Runs the suite once with instrumentation, publishes
+the TOTAL line + per-file table to the workflow run's summary page, uploads
+`lcov.info` as an artifact, and on default-branch pushes force-pushes a
+shields.io badge JSON to an orphan `badges` branch:
+
+```markdown
+[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmuvon%2FREPO%2Fbadges%2Fcoverage.json&style=flat-square)](https://github.com/muvon/REPO/actions/workflows/ci.yml)
+```
+
+```yaml
+  coverage:
+    name: Coverage Report
+    permissions:
+      contents: write # push the badge JSON to the `badges` branch
+    uses: muvon/ci-workflow/.github/workflows/rust-coverage.yml@master
+```
+
+### Inputs
+
+| Input                   | Default       | Description                                                       |
+| ----------------------- | ------------- | ----------------------------------------------------------------- |
+| `toolchain`             | `1.97.1`      | Rust toolchain version                                             |
+| `ignore-filename-regex` | `_tests\.rs$` | Files excluded from the report (test-only files)                   |
+| `badge`                 | `true`        | Publish the coverage badge on default-branch pushes                |
+| `badge-branch`          | `master`      | Branch whose pushes publish the badge                              |
+| `setup-protoc`          | `false`       | Install protoc before building                                     |
+| `tools`                 | _(none)_      | Extra tools via `taiki-e/install-action`                           |
+| `feature-flags`         | _(none)_      | Flags for the instrumented test run (e.g. `--all-features`)        |
+| `setup-script`          | _(none)_      | Bash project setup before coverage (e.g. ONNX Runtime download)    |
+
+The badge step needs `permissions: contents: write` in the caller (shown
+above); pass `badge: false` for read-only tokens. Reference setup:
+`muvon/synx`.
+
 ## Rust Publish (`rust-publish.yml`)
 
 Publishes a crate to crates.io: validates the tag matches `Cargo.toml` version,
