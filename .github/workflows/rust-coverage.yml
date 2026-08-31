@@ -7,7 +7,7 @@ on:
         description: 'Rust toolchain version'
         type: string
         required: false
-        default: '1.97.1'
+        default: '1.98.0'
       ignore-filename-regex:
         description: 'Files matching this regex are excluded from the report (test-only files)'
         type: string

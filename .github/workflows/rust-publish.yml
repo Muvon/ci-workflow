@@ -22,7 +22,7 @@ on:
         description: 'Rust toolchain version'
         type: string
         required: false
-        default: '1.97.1'
+        default: '1.98.0'
     secrets:
       CARGO_REGISTRY_TOKEN:
         required: true

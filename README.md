@@ -146,7 +146,7 @@ jobs:
 
 | Input           | Default                            | Description                                                            |
 | --------------- | ---------------------------------- | ----------------------------------------------------------------------- |
-| `toolchain`     | `1.97.1`                           | Rust toolchain version (bump here → propagates to all repos)             |
+| `toolchain`     | `1.98.0`                           | Rust toolchain version (bump here → propagates to all repos)             |
 | `runner`        | `ubuntu-latest`                    | Runner for jobs that compile the crate (e.g. `macos-15` for a macOS app) |
 | `feature-flags` | _(none)_                           | Flags for `cargo check`/`clippy`/`doc` (e.g. `--all-features`)           |
 | `setup-protoc`  | `false`                            | Install protoc before building                                           |
@@ -186,7 +186,7 @@ shields.io badge JSON to an orphan `badges` branch:
 
 | Input                   | Default       | Description                                                       |
 | ----------------------- | ------------- | ----------------------------------------------------------------- |
-| `toolchain`             | `1.97.1`      | Rust toolchain version                                             |
+| `toolchain`             | `1.98.0`      | Rust toolchain version                                             |
 | `ignore-filename-regex` | `_tests\.rs$` | Files excluded from the report (test-only files)                   |
 | `badge`                 | `true`        | Publish the coverage badge on default-branch pushes                |
 | `badge-branch`          | `master`      | Branch whose pushes publish the badge                              |
@@ -215,7 +215,7 @@ secret, or pass explicitly).
 | `tag`           | pushed tag ref | Version tag (set explicitly for `workflow_dispatch`)     |
 | `publish-flags` | _(none)_       | Flags for `cargo publish` (e.g. `--no-default-features`) |
 | `setup-protoc`  | `false`        | Install protoc before building                           |
-| `toolchain`     | `1.97.1`       | Rust toolchain version                                   |
+| `toolchain`     | `1.98.0`       | Rust toolchain version                                   |
 
 ## NPM Publish (`npm-publish.yml`)
 
