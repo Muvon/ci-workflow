@@ -17,7 +17,7 @@ on:
         description: 'Create the release as draft'
         type: boolean
         required: false
-        default: true
+        default: false
       npm-args:
         description: 'JSON array of args for `npx @muvon/<repo>` (e.g. ["mcp"]). Set to add an npm package entry to server.json'
         type: string
