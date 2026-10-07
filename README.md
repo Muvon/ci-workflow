@@ -74,7 +74,7 @@ Creates a GitHub release with notes taken from `CHANGELOG.md`:
 
 - Resolves the version from the pushed tag (or `tag` input) and validates semver
 - Extracts the `## [X.Y.Z]` section from `CHANGELOG.md` as the release body — fails if the section is missing
-- Marks `0.x` and `-prerelease` versions as prereleases
+- Marks `-prerelease` versions (e.g. `1.0.0-rc.1`) as prereleases
 - Skips creation if the release already exists (idempotent re-runs)
 - Optionally downloads workflow artifacts and attaches them to the release
 
@@ -113,7 +113,7 @@ jobs:
 | ----------- | -------------- | ------------------------------------------------------------------------ |
 | `tag`       | pushed tag ref | Release tag (set explicitly for `workflow_dispatch` callers)             |
 | `artifacts` | _(none)_       | Artifact name pattern to download and attach to the release              |
-| `draft`     | `true`         | Keep as draft; `false` publishes after all artifacts are attached        |
+| `draft`     | `false`        | `true` keeps it as draft; `false` publishes after all artifacts are attached |
 
 ### Outputs
 
