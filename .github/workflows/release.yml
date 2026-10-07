@@ -168,9 +168,9 @@ jobs:
           fi
 
           ARGS=(--title "Release $VERSION" --notes-file release_changelog.md --draft)
-          # Prereleases: explicit -prerelease suffix or pre-1.0 versions
+          # Prereleases: explicit -prerelease suffix only
           case "$VERSION" in
-            *-*|0.*|v0.*) ARGS+=(--prerelease) ;;
+            *-*) ARGS+=(--prerelease) ;;
           esac
 
           gh release create "$VERSION" "${ARGS[@]}"
