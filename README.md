@@ -51,6 +51,7 @@ jobs:
       role: developer:brief
       model: openrouter:anthropic/claude-sonnet-4
       comment: compact
+      max_cost: '2.00'
 ```
 
 ### Inputs
@@ -60,7 +61,13 @@ jobs:
 | `role`    | `developer:brief`    | Octomind role                              |
 | `model`   | `ollama:glm-5.1`     | Model override                             |
 | `comment` | `full`               | PR comment mode: `full`, `compact`, `none` |
+| `max_cost` | `2.00`              | Positive session spending stop threshold in USD |
 
+
+PR briefs use `muvon/octomind-action@v2` with a default `max_cost` of `2.00` USD.
+Callers can override this amount using the input above. This is a session spending
+stop threshold, not a hard billing ceiling: in-flight requests can overshoot,
+and enforcement depends on provider-reported costs.
 ### Env passed to octomind-action
 
 | Name              | Source                       |
