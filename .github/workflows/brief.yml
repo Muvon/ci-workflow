@@ -15,6 +15,11 @@ on:
         type: string
         required: false
         default: 'full'
+      max_cost:
+        description: 'Session spending stop threshold in USD; not a hard billing ceiling'
+        type: string
+        required: false
+        default: '2.00'
 
 jobs:
   brief:
@@ -53,11 +58,12 @@ jobs:
             echo "OCTOMIND_PROMPT_EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - uses: muvon/octomind-action@master
+      - uses: muvon/octomind-action@v2
         with:
           role: ${{ inputs.role }}
           model: ${{ inputs.model }}
           prompt: ${{ steps.prompt.outputs.value }}
           comment: ${{ inputs.comment }}
+          max_cost: ${{ inputs.max_cost }}
         env:
           OCTOHUB_API_KEY: ${{ secrets.OCTOHUB_API_KEY }}
