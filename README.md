@@ -84,8 +84,12 @@ Creates a GitHub release with notes taken from `CHANGELOG.md`:
 - Marks `-prerelease` versions (e.g. `1.0.0-rc.1`) as prereleases
 - Skips creation if the release already exists (idempotent re-runs)
 - Optionally downloads workflow artifacts and attaches them to the release
+- When a published stable release attaches `*-pc-windows-msvc.zip` archives, dispatches `release` to
+  [Muvon/scoop-bucket](https://github.com/Muvon/scoop-bucket), which writes the tool's Scoop manifest
 
-Requires `contents: write` on the caller's `GITHUB_TOKEN`.
+Requires `contents: write` on the caller's `GITHUB_TOKEN`. The Scoop dispatch needs the org-level `TAP_GITHUB_TOKEN`
+(with access to `Muvon/scoop-bucket`) passed through `secrets: inherit`; without it the step is skipped with a
+warning.
 
 ### Usage
 
@@ -109,6 +113,7 @@ jobs:
   release:
     needs: build
     uses: muvon/ci-workflow/.github/workflows/release.yml@master
+    secrets: inherit
     with:
       artifacts: 'bin-*'
       draft: false

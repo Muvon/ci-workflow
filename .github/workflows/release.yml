@@ -23,6 +23,10 @@ on:
         type: string
         required: false
         default: ''
+    secrets:
+      TAP_GITHUB_TOKEN:
+        description: 'Token allowed to dispatch to Muvon/scoop-bucket; without it the Scoop update is skipped'
+        required: false
     outputs:
       version:
         description: 'Resolved release version'
@@ -192,3 +196,28 @@ jobs:
           VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
           gh release edit "$VERSION" --draft=false
+
+      # The bucket regenerates this tool's manifest from the published release,
+      # so only stable releases that ship Windows zips are announced.
+      - name: Notify Scoop bucket
+        if: ${{ !inputs.draft && inputs.artifacts != '' }}
+        env:
+          TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          if ! ls release-artifacts/*-pc-windows-msvc.zip >/dev/null 2>&1; then
+            echo "No Windows zips, skipping Scoop bucket"
+            exit 0
+          fi
+          case "$VERSION" in
+            *-*) echo "Prerelease, skipping Scoop bucket"; exit 0 ;;
+          esac
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::TAP_GITHUB_TOKEN not passed (secrets: inherit), skipping Scoop bucket"
+            exit 0
+          fi
+          curl -fsS -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $TOKEN" \
+            https://api.github.com/repos/Muvon/scoop-bucket/dispatches \
+            -d "{\"event_type\":\"release\",\"client_payload\":{\"repository\":\"$GITHUB_REPOSITORY\"}}"
