@@ -170,6 +170,7 @@ jobs:
 | `doc`           | `true`                             | Run `cargo doc` with `-D warnings`                                       |
 | `coverage`      | `true`                             | Run tarpaulin and upload to Codecov                                      |
 | `tarpaulin-args`| `--verbose --timeout 120 --out xml`| Arguments for `cargo tarpaulin`                                          |
+| `style-check`   | `true`                             | Fail when `rustfmt.toml` differs from [Muvon/codestyle](https://github.com/Muvon/codestyle) `rust/rustfmt.toml` |
 
 `fmt` and `security` always run on `ubuntu-latest` — neither compiles the crate.
 

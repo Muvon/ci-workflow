@@ -63,6 +63,11 @@ on:
         type: string
         required: false
         default: '--verbose --timeout 120 --out xml'
+      style-check:
+        description: 'Fail when rustfmt.toml differs from Muvon/codestyle rust/rustfmt.toml'
+        type: boolean
+        required: false
+        default: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -84,6 +89,17 @@ jobs:
         with:
           toolchain: ${{ inputs.toolchain }}
           components: rustfmt
+
+      # One formatting standard for every Muvon Rust repo. rustfmt has no remote
+      # config, so each repo commits a copy and this step catches drift.
+      - name: Check rustfmt.toml matches Muvon/codestyle
+        if: inputs.style-check
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/Muvon/codestyle/master/rust/rustfmt.toml -o "$RUNNER_TEMP/rustfmt.toml"
+          if ! diff -u "$RUNNER_TEMP/rustfmt.toml" rustfmt.toml; then
+            echo "::error file=rustfmt.toml::rustfmt.toml drifted from Muvon/codestyle rust/rustfmt.toml. Copy that file here and run cargo fmt --all."
+            exit 1
+          fi
 
       - name: Run cargo fmt
         run: cargo fmt --all -- --check
