@@ -40,8 +40,28 @@ jobs:
         run: |
           curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
 
-      - name: Authenticate to MCP Registry
-        run: ./mcp-publisher login github-oidc
-
+      # npm publish returns before the new version is readable everywhere, and the
+      # registry verifies ownership by fetching package.json from npm. Retry until
+      # npm catches up. Login runs each attempt because the registry token is short-lived.
       - name: Publish server to MCP Registry
-        run: ./mcp-publisher publish server.json
+        run: |
+          attempts=10
+          delay=30
+          for i in $(seq 1 "$attempts"); do
+            ./mcp-publisher login github-oidc
+            if out=$(./mcp-publisher publish server.json 2>&1); then
+              echo "$out"
+              exit 0
+            fi
+            echo "$out"
+            if echo "$out" | grep -q 'duplicate version'; then
+              echo "::error::server.json version already published; bump it before tagging"
+              exit 1
+            fi
+            if [ "$i" -lt "$attempts" ]; then
+              echo "Attempt $i/$attempts failed, retrying in ${delay}s"
+              sleep "$delay"
+            fi
+          done
+          echo "::error::MCP registry publish failed after $attempts attempts"
+          exit 1
