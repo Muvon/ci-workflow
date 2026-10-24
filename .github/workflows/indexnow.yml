@@ -29,6 +29,8 @@ jobs:
   indexnow:
     name: Submit changed pages to IndexNow
     runs-on: ubuntu-latest
+    # A hung build or server would otherwise hold the repo's concurrency group for 6h.
+    timeout-minutes: 30
     permissions:
       contents: write # push the state file to the `indexnow` branch
     # Serialised, not cancelled: a run killed between submission and the state
