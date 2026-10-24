@@ -305,6 +305,61 @@ npm publish --access public ./npm-dist   # --dry-run to inspect first
 The binaries come from the GitHub release at runtime, so nothing needs to be
 built locally — only the release for that tag has to exist.
 
+## IndexNow (`indexnow.yml`)
+
+Submits new or changed pages of a website to [IndexNow](https://www.indexnow.org)
+(Bing, Yandex, …) on every default-branch push:
+
+- Builds the site (`bun install --frozen-lockfile` + `bun run build`)
+- Hashes each page's text content (title, description, visible text, alt text),
+  so rebuilds with new bundle hashes don't count as changes
+- Submits only pages whose hash differs from the previous run, via
+  [`indexnow/indexnow.ts`](indexnow/indexnow.ts)
+- Force-pushes the state (`state.json`, per-URL hashes) to the orphan `indexnow`
+  branch — the protected default branch is never written to
+
+Pages come from the prerendered `build/` directory. SSR sites pass `serve`: the
+workflow starts that command, waits for `base-url/sitemap.xml`, and reads the
+pages listed there.
+
+The site must serve the key at `https://<host>/<key>.txt`.
+
+### Usage
+
+```yaml
+# .github/workflows/indexnow.yml
+on:
+  push: { branches: [master, main] }
+
+jobs:
+  indexnow:
+    permissions:
+      contents: write # push the state to the `indexnow` branch
+    uses: muvon/ci-workflow/.github/workflows/indexnow.yml@master
+    with:
+      host: getvext.app
+      key: f07164d86378b580e722acd4882247e5
+```
+
+### Inputs
+
+| Input         | Default                 | Description                                                         |
+| ------------- | ----------------------- | ------------------------------------------------------------------- |
+| `host`        | _(required)_            | Public site host                                                    |
+| `key`         | _(required)_            | IndexNow key                                                        |
+| `bun-version` | `1.3.14`                | Bun version for install and build                                   |
+| `serve`       | _(none)_                | SSR sites: command serving the build on `base-url`                  |
+| `base-url`    | `http://localhost:4173` | Where `serve` listens                                               |
+
+Dry run from a site's repo after `bun run build` (prints what would be
+submitted, writes nothing):
+
+```sh
+INDEXNOW_HOST=getvext.app INDEXNOW_KEY=<key> bun ../ci-workflow/indexnow/indexnow.ts
+```
+
+Reference setups: `muvon/vext-web` (prerendered), `muvon/cointrapper-web` (SSR).
+
 ## Shipping a Rust project
 
 The full pattern — CI on every push/PR, release on tag. Project-specific jobs
